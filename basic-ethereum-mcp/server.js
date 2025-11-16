@@ -161,6 +161,71 @@ server.tool("get_block_number", {}, async () => {
   }
 });
 
+server.tool(
+  "get_transaction_count",
+  {
+    address: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/)
+      .describe("Ethereum address"),
+  },
+  async ({ address }) => {
+    try {
+      const txCount = await provider.getTransactionCount(address);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                address: address,
+                transactionCount: txCount,
+                description: "Number of transactions sent from this address",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ error: error.message }) },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.resource("network-info", "eth://network/info", async (uri) => {
+  const [blockNumber, gasPrice] = await Promise.all([
+    provider.getBlockNumber(),
+    provider.getFeeData(),
+  ]);
+
+  return {
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify(
+          {
+            network: "Ethereum Mainnet",
+            latestBlock: blockNumber,
+            gasPrice: ethers.formatUnits(gasPrice.gasPrice, "gwei") + " Gwei",
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+});
+
 // ============================================================================
 // SERVER STARTUP
 // ============================================================================
