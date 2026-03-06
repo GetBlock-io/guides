@@ -1,0 +1,19 @@
+{
+	"dependencies": {
+		"@goat-sdk/adapter-langchain": "^0.2.12",
+		"@goat-sdk/core": "^0.5.0",
+		"@goat-sdk/plugin-jupiter": "^0.2.17",
+		"@goat-sdk/plugin-pumpfun": "^0.1.10",
+		"@goat-sdk/plugin-spl-token": "^0.2.19",
+		"@goat-sdk/wallet-solana": "^0.3.1",
+		"@langchain/core": "^1.1.31",
+		"@langchain/langgraph": "^1.2.0",
+		"@langchain/openai": "^1.2.12",
+		"@solana/web3.js": "^1.98.4",
+		"bs58": "^6.0.0",
+		"dotenv": "^17.3.1"
+	},
+	"scripts": {
+		"dev": "npx tsx agent.ts"
+	}
+}
