@@ -1,0 +1,36 @@
+{
+  "name": "solana-priority-fees-guide",
+  "version": "1.0.0",
+  "description": "Complete guide to Solana Priority Fees for transaction optimization",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node-dev --respawn src/index.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "base58": "^2.0.1",
+    "bs58": "^6.0.0",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "solana",
+    "priority-fees",
+    "compute-units",
+    "transaction-optimization",
+    "blockchain"
+  ],
+  "author": "GetBlock DevRel",
+  "license": "MIT"
+}
