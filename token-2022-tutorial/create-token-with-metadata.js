@@ -20,7 +20,7 @@ async function createTokenWithMetadata() {
   const metadata = {
     updateAuthority: payer.publicKey,
     mint: mint,
-    name: "GetBlock Tutorial Token",
+    name: "GBT Token Tutorial",
     symbol: "GBT",
     uri: "https://getblock.io/",
     additionalMetadata: [["description", "A test token created with GetBlock"]],
