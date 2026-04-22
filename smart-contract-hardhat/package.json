@@ -24,7 +24,7 @@
   "scripts": {
     "set": "npx hardhat vars set",
     "get": "npx hardhat vars get",
-    "deploy": "npx hardhat ignition deploy ./ignition/modules/FairPayEscrow.ts --network sepolia",
+    "deploy": "npx hardhat ignition deploy ./ignition/modules/Lock.ts --network sepolia",
     "compile": "npx hardhat compile",
     "test": "npx hardhat test"
   }
