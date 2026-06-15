@@ -1,0 +1,1 @@
+var protocol;Object.defineProperty(exports,"__esModule",{value:!0}),exports.protocol=void 0,function(o){let e;!function(o){o[o.BANDWIDTH=0]="BANDWIDTH",o[o.ENERGY=1]="ENERGY",o[o.TRON_POWER=2]="TRON_POWER"}(e=o.ResourceCode||(o.ResourceCode={}))}(protocol||(exports.protocol=protocol={}));
