@@ -77,7 +77,6 @@ export async function onboardWallet(address, network = "eth") {
     };
   } catch (err) {
     console.error("Audit failed:", err.message);
-    //Fail-closed Fail closed: if we can't audit, we don't onboard.
     return { allow: false, reason: "audit failed — could not verify wallet" };
   }
 }

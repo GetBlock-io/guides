@@ -11,7 +11,7 @@ This is a smart user-onboarding app that makes use of the GetBlock Full Wallet A
 ## Supported networks
 
 1. Ethereum (ETH): `eth`
-2. BNB Smart Chain: `bsc` / `bnb`
+2. BNB Smart Chain: `bsc`
 3. Base: `base`
 
 ## Tech Stack

@@ -14,7 +14,7 @@ This is a token due-diligence app that makes use of the GetBlock Rug Pull Check 
 
 1. Ethereum (ETH): `eth`
 
-2. BNB Smart Chain: `bsc` / `bnb`
+2. BNB Smart Chain: `bsc`
 
 3. Base: `base`
 
