@@ -43,4 +43,3 @@ This is a compliance and risk management app that makes use of the GetBlock Wall
 
 - Commit secrets or `.env` files
 - Force push to main
-
