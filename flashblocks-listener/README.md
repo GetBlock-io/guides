@@ -54,9 +54,13 @@ go build -o optimism-listener ./optimism
 
 ## Notes
 
-- A token **must be flashblocks-enabled** for the correct chain. A standard node
-  token connects fine but never streams (it rejects the `newFlashblocks`
-  subscription).
+- **The two feeds use different payload shapes**, which is why the code is split:
+  - **Optimism** sends the raw flashblocks *diff* format —
+    `{payload_id, index, diff, metadata}` (snake_case, `metadata` with receipts
+    and account balances).
+  - **Base** sends a *full block* snapshot in standard Ethereum JSON
+    (camelCase, hex quantities, full transaction objects). `hash`/`stateRoot`
+    read as zero while the block is still in progress (shown as `(pending)`).
 - The endpoint URL (including the token) is intentionally **not logged**, so
   screenshots and logs won't leak your token.
 - If a token is missing, the program exits with a clear message telling you

@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -56,71 +57,53 @@ type subscriptionEnvelope struct {
 	} `json:"error,omitempty"`
 }
 
-// Flashblock represents the root structure of a flashblock message.
+// Flashblock is the pre-confirmation block snapshot delivered by the Base
+// (GetBlock) feed. Unlike the Optimism diff format, Base sends a full block
+// object in standard Ethereum JSON (camelCase, hex-encoded quantities) with
+// full transaction objects. Fields like hash/stateRoot are zero while the
+// block is still in progress.
 type Flashblock struct {
-	PayloadID string    `json:"payload_id"`
-	Index     int       `json:"index"`
-	Diff      BlockDiff `json:"diff"`
-	Metadata  Metadata  `json:"metadata"`
+	Number        string        `json:"number"`
+	Hash          string        `json:"hash"`
+	ParentHash    string        `json:"parentHash"`
+	StateRoot     string        `json:"stateRoot"`
+	ReceiptsRoot  string        `json:"receiptsRoot"`
+	GasUsed       string        `json:"gasUsed"`
+	GasLimit      string        `json:"gasLimit"`
+	BaseFeePerGas string        `json:"baseFeePerGas"`
+	Timestamp     string        `json:"timestamp"`
+	Transactions  []Transaction `json:"transactions"`
 }
 
-// BlockDiff contains the block differences/updates.
-type BlockDiff struct {
-	BlobGasUsed     string   `json:"blob_gas_used"`
-	BlockHash       string   `json:"block_hash"`
-	GasUsed         string   `json:"gas_used"`
-	LogsBloom       string   `json:"logs_bloom"`
-	ReceiptsRoot    string   `json:"receipts_root"`
-	StateRoot       string   `json:"state_root"`
-	Transactions    []string `json:"transactions"`
-	Withdrawals     []any    `json:"withdrawals"`
-	WithdrawalsRoot string   `json:"withdrawals_root"`
+// Transaction is a full transaction object embedded in the block.
+type Transaction struct {
+	Hash string `json:"hash"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	Type string `json:"type"`
 }
 
-// Metadata contains block metadata including balances and receipts.
-type Metadata struct {
-	BlockNumber        uint64             `json:"block_number"`
-	NewAccountBalances map[string]string  `json:"new_account_balances"`
-	Receipts           map[string]Receipt `json:"receipts"`
-}
-
-// Receipt represents a transaction receipt (can be EIP-1559 or Legacy).
-type Receipt struct {
-	Eip1559 *ReceiptData `json:"Eip1559,omitempty"`
-	Legacy  *ReceiptData `json:"Legacy,omitempty"`
-}
-
-// GetData returns the receipt data regardless of type.
-func (r *Receipt) GetData() *ReceiptData {
-	if r.Eip1559 != nil {
-		return r.Eip1559
+// hexToUint64 parses a "0x"-prefixed hex quantity; returns 0 if empty/invalid.
+func hexToUint64(s string) uint64 {
+	s = strings.TrimPrefix(s, "0x")
+	if s == "" {
+		return 0
 	}
-	return r.Legacy
-}
-
-// GetType returns the receipt type as a string.
-func (r *Receipt) GetType() string {
-	if r.Eip1559 != nil {
-		return "EIP-1559"
+	n, err := strconv.ParseUint(s, 16, 64)
+	if err != nil {
+		return 0
 	}
-	if r.Legacy != nil {
-		return "Legacy"
+	return n
+}
+
+// isZeroHash reports whether a hash is all zeros (block still in progress).
+func isZeroHash(h string) bool {
+	for _, c := range strings.TrimPrefix(h, "0x") {
+		if c != '0' {
+			return false
+		}
 	}
-	return "Unknown"
-}
-
-// ReceiptData contains the actual receipt information.
-type ReceiptData struct {
-	CumulativeGasUsed string `json:"cumulativeGasUsed"`
-	Logs              []Log  `json:"logs"`
-	Status            string `json:"status"`
-}
-
-// Log represents an event log.
-type Log struct {
-	Address string   `json:"address"`
-	Data    string   `json:"data"`
-	Topics  []string `json:"topics"`
+	return true
 }
 
 func main() {
@@ -250,41 +233,27 @@ func handleFlashblockJSON(data []byte) {
 }
 
 func printFlashblock(fb *Flashblock) {
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Printf("FLASHBLOCK #%d | Block: %d | Hash: %s\n",
-		fb.Index,
-		fb.Metadata.BlockNumber,
-		truncateHash(fb.Diff.BlockHash))
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-
-	fmt.Printf("  Gas Used:       %s\n", fb.Diff.GasUsed)
-	fmt.Printf("  Blob Gas Used:  %s\n", fb.Diff.BlobGasUsed)
-	fmt.Printf("  State Root:     %s\n", truncateHash(fb.Diff.StateRoot))
-	fmt.Printf("  Receipts Root:  %s\n", truncateHash(fb.Diff.ReceiptsRoot))
-
-	fmt.Printf("\n  Transactions: %d\n", len(fb.Diff.Transactions))
-	for i, tx := range fb.Diff.Transactions {
-		fmt.Printf("    [%d] %s...\n", i, truncateHash(tx))
+	hash := truncateHash(fb.Hash)
+	if isZeroHash(fb.Hash) {
+		hash = "(pending)"
 	}
 
-	fmt.Printf("\n  Account Balance Updates: %d\n", len(fb.Metadata.NewAccountBalances))
+	fmt.Println("═══════════════════════════════════════════════════════════════")
+	fmt.Printf("FLASHBLOCK | Block: %d | Hash: %s\n", hexToUint64(fb.Number), hash)
+	fmt.Println("═══════════════════════════════════════════════════════════════")
 
-	fmt.Printf("\n  Receipts: %d\n", len(fb.Metadata.Receipts))
-	receiptCount := 0
-	for txHash, receipt := range fb.Metadata.Receipts {
-		if receiptCount >= 3 {
-			fmt.Printf("    ... and %d more receipts\n", len(fb.Metadata.Receipts)-3)
+	fmt.Printf("  Gas Used:       %d\n", hexToUint64(fb.GasUsed))
+	fmt.Printf("  Base Fee:       %d\n", hexToUint64(fb.BaseFeePerGas))
+	fmt.Printf("  State Root:     %s\n", truncateHash(fb.StateRoot))
+	fmt.Printf("  Receipts Root:  %s\n", truncateHash(fb.ReceiptsRoot))
+
+	fmt.Printf("\n  Transactions: %d\n", len(fb.Transactions))
+	for i, tx := range fb.Transactions {
+		if i >= 5 {
+			fmt.Printf("    ... and %d more\n", len(fb.Transactions)-5)
 			break
 		}
-		data := receipt.GetData()
-		if data != nil {
-			fmt.Printf("    [%s] %s - Status: %s, Logs: %d\n",
-				receipt.GetType(),
-				truncateHash(txHash),
-				data.Status,
-				len(data.Logs))
-		}
-		receiptCount++
+		fmt.Printf("    [%d] %s from %s\n", i, truncateHash(tx.Hash), truncateHash(tx.From))
 	}
 
 	fmt.Println()
