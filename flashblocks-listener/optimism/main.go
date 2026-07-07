@@ -1,6 +1,15 @@
+// Command optimism listens to Optimism flashblocks via a GetBlock WebSocket endpoint.
+//
+// It connects, sends an `eth_subscribe` request for "newFlashblocks", and
+// prints each flashblock notification as it arrives (~200ms apart).
+//
+// The GetBlock access token is read from the environment (see .env.example),
+// so it is never hard-coded here. The token must be for Optimism
+// (chainId 0xa / 10) with Flashblocks enabled.
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -9,25 +18,53 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/andybalholm/brotli"
 	"github.com/gorilla/websocket"
 )
 
+// chainName is used only for log output.
+const chainName = "Optimism"
+
+// wsHost is the GetBlock WebSocket host; only the per-token path is secret.
+const wsHost = "wss://go.getblock.io/"
+
+// Environment variable names holding the GetBlock access token per network.
+// Set them in a .env file (see .env.example) — never hard-code tokens.
 const (
-	mainnetWSURL = "wss://mainnet.flashblocks.base.org/ws"
-	sepoliaWSURL = "wss://sepolia.flashblocks.base.org/ws"
+	mainnetTokenEnv = "OPTIMISM_MAINNET_TOKEN"
+	sepoliaTokenEnv = "OPTIMISM_SEPOLIA_TOKEN"
 )
 
-// Flashblock represents the root structure of a flashblock message
-type Flashblock struct {
-	Diff     BlockDiff `json:"diff"`
-	Index    int       `json:"index"`
-	Metadata Metadata  `json:"metadata"`
+// subscriptionEnvelope is the JSON-RPC wrapper the node sends for each
+// eth_subscription notification. The flashblock itself lives in params.result.
+type subscriptionEnvelope struct {
+	Method string `json:"method"`
+	Params struct {
+		Subscription string          `json:"subscription"`
+		Result       json.RawMessage `json:"result"`
+	} `json:"params"`
+	// Present on the initial subscription confirmation / errors, not on notifications.
+	ID     *int            `json:"id,omitempty"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    string `json:"data"`
+	} `json:"error,omitempty"`
 }
 
-// BlockDiff contains the block differences/updates
+// Flashblock represents the root structure of a flashblock message.
+type Flashblock struct {
+	PayloadID string    `json:"payload_id"`
+	Index     int       `json:"index"`
+	Diff      BlockDiff `json:"diff"`
+	Metadata  Metadata  `json:"metadata"`
+}
+
+// BlockDiff contains the block differences/updates.
 type BlockDiff struct {
 	BlobGasUsed     string   `json:"blob_gas_used"`
 	BlockHash       string   `json:"block_hash"`
@@ -40,20 +77,20 @@ type BlockDiff struct {
 	WithdrawalsRoot string   `json:"withdrawals_root"`
 }
 
-// Metadata contains block metadata including balances and receipts
+// Metadata contains block metadata including balances and receipts.
 type Metadata struct {
 	BlockNumber        uint64             `json:"block_number"`
 	NewAccountBalances map[string]string  `json:"new_account_balances"`
 	Receipts           map[string]Receipt `json:"receipts"`
 }
 
-// Receipt represents a transaction receipt (can be EIP-1559 or Legacy)
+// Receipt represents a transaction receipt (can be EIP-1559 or Legacy).
 type Receipt struct {
 	Eip1559 *ReceiptData `json:"Eip1559,omitempty"`
 	Legacy  *ReceiptData `json:"Legacy,omitempty"`
 }
 
-// GetData returns the receipt data regardless of type
+// GetData returns the receipt data regardless of type.
 func (r *Receipt) GetData() *ReceiptData {
 	if r.Eip1559 != nil {
 		return r.Eip1559
@@ -61,7 +98,7 @@ func (r *Receipt) GetData() *ReceiptData {
 	return r.Legacy
 }
 
-// GetType returns the receipt type as a string
+// GetType returns the receipt type as a string.
 func (r *Receipt) GetType() string {
 	if r.Eip1559 != nil {
 		return "EIP-1559"
@@ -72,14 +109,14 @@ func (r *Receipt) GetType() string {
 	return "Unknown"
 }
 
-// ReceiptData contains the actual receipt information
+// ReceiptData contains the actual receipt information.
 type ReceiptData struct {
 	CumulativeGasUsed string `json:"cumulativeGasUsed"`
 	Logs              []Log  `json:"logs"`
 	Status            string `json:"status"`
 }
 
-// Log represents an event log
+// Log represents an event log.
 type Log struct {
 	Address string   `json:"address"`
 	Data    string   `json:"data"`
@@ -90,17 +127,28 @@ func main() {
 	network := flag.String("network", "mainnet", "Network to connect to: mainnet or sepolia")
 	flag.Parse()
 
-	var wsURL string
+	// Load .env from the working directory if present (optional; env vars set
+	// another way still work).
+	loadDotEnv(".env")
+
+	var tokenEnv string
 	switch *network {
 	case "mainnet":
-		wsURL = mainnetWSURL
+		tokenEnv = mainnetTokenEnv
 	case "sepolia":
-		wsURL = sepoliaWSURL
+		tokenEnv = sepoliaTokenEnv
 	default:
 		log.Fatalf("Invalid network: %s. Use 'mainnet' or 'sepolia'", *network)
 	}
 
-	log.Printf("Connecting to Base flashblocks on %s: %s", *network, wsURL)
+	token := os.Getenv(tokenEnv)
+	if token == "" {
+		log.Fatalf("%s is not set. Copy .env.example to .env and add your GetBlock token.", tokenEnv)
+	}
+	wsURL := wsHost + token
+
+	// Note: wsURL is not logged because it contains the secret token.
+	log.Printf("Connecting to %s flashblocks on %s...", chainName, *network)
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -108,7 +156,13 @@ func main() {
 	}
 	defer conn.Close()
 
-	log.Println("Connected! Listening for flashblocks...")
+	log.Println("Connected! Subscribing to flashblocks...")
+
+	// The node does not stream automatically; we must subscribe first.
+	subscribeMsg := `{"jsonrpc":"2.0","id":1,"method":"eth_subscribe","params":["newFlashblocks"]}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(subscribeMsg)); err != nil {
+		log.Fatalf("Failed to send subscription request: %v", err)
+	}
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -164,10 +218,31 @@ func decodeBrotli(data []byte) ([]byte, error) {
 }
 
 func handleFlashblockJSON(data []byte) {
-	var flashblock Flashblock
-	if err := json.Unmarshal(data, &flashblock); err != nil {
-		log.Printf("Error parsing flashblock JSON: %v", err)
+	var env subscriptionEnvelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		log.Printf("Error parsing message JSON: %v", err)
 		log.Printf("Raw data: %s", string(data))
+		return
+	}
+
+	// Subscription confirmation or error response (has a top-level id).
+	if env.ID != nil {
+		if env.Error != nil {
+			log.Fatalf("Subscription failed: %s (data: %s)", env.Error.Message, env.Error.Data)
+		}
+		log.Printf("Subscribed to flashblocks (subscription id: %s)", string(env.Result))
+		return
+	}
+
+	// Flashblock notification: the block is nested in params.result.
+	if env.Method != "eth_subscription" || len(env.Params.Result) == 0 {
+		return
+	}
+
+	var flashblock Flashblock
+	if err := json.Unmarshal(env.Params.Result, &flashblock); err != nil {
+		log.Printf("Error parsing flashblock JSON: %v", err)
+		log.Printf("Raw data: %s", string(env.Params.Result))
 		return
 	}
 
@@ -220,4 +295,35 @@ func truncateHash(hash string) string {
 		return hash
 	}
 	return hash[:10] + "..." + hash[len(hash)-8:]
+}
+
+// loadDotEnv loads KEY=VALUE pairs from a .env file into the process
+// environment. It is a no-op if the file is absent, and never overrides a
+// variable that is already set in the environment.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // .env is optional
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		val = strings.Trim(strings.TrimSpace(val), `"'`)
+		if _, exists := os.LookupEnv(key); !exists {
+			os.Setenv(key, val)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("Warning: error reading %s: %v", path, err)
+	}
 }
