@@ -1,0 +1,16 @@
+{
+  "name": "robinhood-ai-agent",
+  "version": "1.0.0",
+  "description": "AI agent for Robinhood Chain using GetBlock RPC and OpenAI function calling",
+  "type": "module",
+  "scripts": {
+    "quickstart": "node quickstart.js",
+    "watch": "node watch-blocks.js",
+    "agent": "node agent.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.104.0",
+    "viem": "^2.21.0"
+  }
+}
