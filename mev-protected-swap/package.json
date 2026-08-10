@@ -1,0 +1,16 @@
+{
+  "name": "mev-protected-swap",
+  "version": "1.0.0",
+  "description": "Swap on PancakeSwap through a GetBlock MEV-protected endpoint",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "swap": "node index.js"
+  },
+  "keywords": ["mev", "getblock", "bsc", "pancakeswap"],
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "ethers": "^6.16.0"
+  }
+}
