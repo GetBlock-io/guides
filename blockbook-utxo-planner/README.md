@@ -87,4 +87,3 @@ node --env-file=.env plan.js 3.0 --from bc1q... --to bc1q... --min-conf 6
   transaction means building a PSBT and signing it, which needs keys this program
   never sees.
 
-See [guide.md](guide.md) for the walkthrough.
