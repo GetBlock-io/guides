@@ -1,0 +1,14 @@
+{
+  "name": "blockbook-utxo-planner",
+  "version": "1.0.0",
+  "description": "Plan and price a Bitcoin spend from Blockbook's UTXO and fee-estimate endpoints, without signing anything",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node --env-file=.env plan.js"
+  },
+  "keywords": ["blockbook", "bitcoin", "utxo", "coin-selection", "fees", "getblock"],
+  "license": "MIT"
+}
