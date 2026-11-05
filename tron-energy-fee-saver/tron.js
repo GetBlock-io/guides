@@ -22,7 +22,8 @@ export async function getBurnPrices() {
 
 /** An address exists on-chain once it has been activated (received TRX or been created). */
 export async function isActivated(address) {
-  const account = await tronWeb.trx.getAccount(address);
+  // trx.getAccount() reads from walletsolidity; ask the full node so one Full Node REST endpoint is enough.
+  const account = await tronWeb.fullNode.request("wallet/getaccount", { address, visible: true }, "post");
   return Boolean(account.address);
 }
 
@@ -38,14 +39,18 @@ export async function getResources(address) {
 
 /** USDT balance in whole tokens (6 decimals). */
 export async function usdtBalance(address) {
-  const { constant_result } = await tronWeb.transactionBuilder.triggerConstantContract(
+  const res = await tronWeb.transactionBuilder.triggerConstantContract(
     USDT,
     "balanceOf(address)",
     {},
     [{ type: "address", value: address }],
     address
   );
-  return Number(BigInt("0x" + constant_result[0])) / 1e6;
+  if (!res.constant_result) {
+    // A JSON-RPC endpoint answers REST calls with { jsonrpc, error } — TronWeb needs Full Node REST.
+    throw new Error(`TRON node returned no result: ${JSON.stringify(res)}. Is TRON_RPC_URL a Full Node REST endpoint?`);
+  }
+  return Number(BigInt("0x" + res.constant_result[0])) / 1e6;
 }
 
 /**
